@@ -56,7 +56,7 @@ class Decoder(nn.Module):
         self.pe_maxlen = pe_maxlen
 
         self.tgt_word_emb = nn.Embedding(n_tgt_vocab, d_word_vec)
-        self.positional_encoding = PositionalEncoding(d_model, max_len=pe_maxlen)
+        self.pos_emb = PositionalEncoding(d_model, max_len=pe_maxlen)
         self.dropout = nn.Dropout(dropout)
 
         self.layer_stack = nn.ModuleList([
@@ -105,41 +105,32 @@ class Decoder(nn.Module):
         Returns:
         """
         dec_slf_attn_list, dec_enc_attn_list = [], []
+        
+        '''
+            1. token转embdding，添加PE
+        '''
+        ys_in_pad, ys_out_pad = self.preprocess(padded_input)   # ys_in_pad 加了[S]符号，torch.Size([B, T])；ys_out_pad 加了[END]符号，torch.Size([B, T])
+        ys_in_fuse_embed = self.tgt_word_emb(ys_in_pad) * self.x_logit_scale 
+        ys_in_fuse_embed += self.pos_emb(ys_in_pad)
+        dec_output = self.dropout(ys_in_fuse_embed)     # dec_output，torch.Size([128, 24, 512])
+        
+        '''
+            2. 为了得到pad 位置
+        '''
+        non_pad_mask = get_non_pad_mask(ys_in_pad, pad_idx=self.eos_id)                 # pad 部分，置零，torch.Size([B, T, 1]) 
+        dec_enc_attn_mask = get_attn_pad_mask(padded_input=encoder_padded_outputs,      # dec_enc_attn_mask，torch.Size([B, 1, encoder_max_len]).expand(-1, ys_in_pad.size(1), -1)
+                                              input_lengths=encoder_input_lengths,
+                                              expand_length=ys_in_pad.size(1))    
 
-        # Get Deocder Input and Output
-        ys_in_pad, ys_out_pad = self.preprocess(padded_input)
-        # print(ys_in_pad.size())   # torch.Size([128, 24])  # 这个加了开始
-        # print(ys_out_pad.size())   # torch.Size([128, 24])　　# 这个加了结束
-
-        # Prepare masks　把解码输入填充的部分全部置0  相当于mask掉
-        non_pad_mask = get_non_pad_mask(ys_in_pad, pad_idx=self.eos_id)  # 把padding部分全部加零
-        # print(non_pad_mask.size())   # torch.Size([128, 24, 1])   # 128个24行1列的小矩阵 24中前面为1,后面有部分为0即为填充部分
-        # print(non_pad_mask)
-
-        slf_attn_mask_subseq = get_subsequent_mask(ys_in_pad)   # 生成和ys_in_pad一样规格的mask矩阵
-        # print(slf_attn_mask_subseq.size())   # torch.Size([128, 24, 24])
-
-        slf_attn_mask_keypad = get_attn_key_pad_mask(seq_k=ys_in_pad,
-                                                     seq_q=ys_in_pad,
-                                                     pad_idx=self.eos_id)   # 对q, k 也加上mask
-        # print(slf_attn_mask_keypad.size())   # torch.Size([128, 24, 24])
-        # print(slf_attn_mask_keypad)
-
-        slf_attn_mask = (slf_attn_mask_keypad + slf_attn_mask_subseq).gt(0)
-        # print(slf_attn_mask.size())   # torch.Size([128, 24, 24])
-        # print(slf_attn_mask)   # 上三角的mask矩阵
-
-        output_length = ys_in_pad.size(1)
-        dec_enc_attn_mask = get_attn_pad_mask(encoder_padded_outputs,
-                                              encoder_input_lengths,
-                                              output_length)
-        print(dec_enc_attn_mask.size())   # torch.Size([128, 24, 21])
-
-        # Forward
-        dec_output = self.dropout(self.tgt_word_emb(ys_in_pad) * self.x_logit_scale +
-                                  self.positional_encoding(ys_in_pad))
-        # print(dec_output.size())   # torch.Size([128, 24, 512])
-
+        '''
+            3. slf_attn_mask
+                encoder: 仅需要考虑pad位置 (不需要做上三角矩阵)
+                decoder: pad mask or 上三角矩阵
+        '''
+        slf_attn_mask_subseq = get_subsequent_mask(ys_in_pad)                           # 上三角矩阵，对角线为0，torch.Size([B, T, T])
+        slf_attn_mask_keypad = get_attn_key_pad_mask(ys_in_pad, ys_in_pad, self.eos_id) # pad mask，设置True，torch.Size([B, 1, T]).expand(-1, T, -1)
+        slf_attn_mask = (slf_attn_mask_keypad + slf_attn_mask_subseq).gt(0)             # 上三角为True 且 mask pad 部分也为True
+        
         for dec_layer in self.layer_stack:
             dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
                 dec_output, encoder_padded_outputs,
@@ -266,7 +257,8 @@ class DecoderLayer(nn.Module):
         self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=dropout)
 
     def forward(self, dec_input, enc_output, non_pad_mask=None, slf_attn_mask=None, dec_enc_attn_mask=None):
-
+        import ipdb;ipdb.set_trace()
+        
         # 解码输入之间的attention
         dec_output, dec_slf_attn = self.slf_attn(
             dec_input, dec_input, dec_input, mask=slf_attn_mask

@@ -106,6 +106,7 @@ def get_data(in_file, out_file):
 
 
 if __name__ == '__main__':
+    import ipdb;ipdb.set_trace()
     # 加载词表　没有的话　我们建立词表
     if os.path.isfile(Config.vocab_file):
         with open(Config.vocab_file, 'rb') as file:

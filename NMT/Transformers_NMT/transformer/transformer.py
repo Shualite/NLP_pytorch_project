@@ -41,6 +41,7 @@ class Transformer(nn.Module):
             input_lengths: N
             padded_targets: N x To
         """
+        import ipdb;ipdb.set_trace()
         encoder_padded_outputs, *_ = self.encoder(padded_input, input_lengths)
         # pred is score before softmax
         pred, gold, *_ = self.decoder(padded_target, encoder_padded_outputs,

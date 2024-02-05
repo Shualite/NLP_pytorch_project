@@ -13,7 +13,7 @@ import torch
 
 class Config:
     # 指定设备
-    device = torch.device('cuda: 0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # 整理好数据要放置的位置
     data_file = './data/data.pkl'   # 将输入和输出整理

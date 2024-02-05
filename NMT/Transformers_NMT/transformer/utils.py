@@ -9,6 +9,17 @@
 """
 import torch
 
+def get_attn_pad_mask(padded_input, input_lengths, expand_length):
+    """
+    mask position is set to 1
+    """
+    # batch_size x Ti x 1
+    non_pad_mask = get_non_pad_mask(padded_input, input_lengths=input_lengths)
+
+    pad_mask = non_pad_mask.squeeze(-1).lt(1)
+    attn_mask = pad_mask.unsqueeze(1).expand(-1, expand_length, -1)
+    return attn_mask
+
 
 def get_non_pad_mask(padded_input, input_lengths=None, pad_idx=None):
     """
@@ -29,16 +40,6 @@ def get_non_pad_mask(padded_input, input_lengths=None, pad_idx=None):
     return non_pad_mask.unsqueeze(-1)
 
 
-def get_attn_pad_mask(padded_input, input_lengths, expand_length):
-    """
-    mask position is set to 1
-    """
-    # batch_size x Ti x 1
-    non_pad_mask = get_non_pad_mask(padded_input, input_lengths=input_lengths)
-
-    pad_mask = non_pad_mask.squeeze(-1).lt(1)
-    attn_mask = pad_mask.unsqueeze(1).expand(-1, expand_length, -1)
-    return attn_mask
 
 
 def pad_list(xs, pad_value):

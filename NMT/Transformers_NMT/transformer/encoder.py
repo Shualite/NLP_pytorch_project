@@ -61,22 +61,28 @@ class Encoder(nn.Module):
         Returns:
             enc_output: N x T x H
         """
+        # import ipdb;ipdb.set_trace()
         enc_slf_attn_list = []
 
-        # Forward
-        enc_outputs = self.src_emb(padded_input)
-        enc_outputs += self.pos_emb(enc_outputs)
-        enc_output = self.dropout(enc_outputs)
-        # print(enc_output.size())   # torch.Size([128, 21, 512])  batch_size x maxlen x hidden_size
+        '''
+            1. token转embdding，添加PE
+        '''
+        src_emb_input = self.src_emb(padded_input)        
+        src_emb_input += self.pos_emb(src_emb_input)
+        enc_output = self.dropout(src_emb_input)      # torch.Size([128, 21, 512]) 
 
-        # Prepare masks
-        non_pad_mask = get_non_pad_mask(enc_output, input_lengths=input_lengths)
-        # print(non_pad_mask.size())   # torch.Size([128, 21, 1]) batch_size x maxlen x 1
-
+        '''
+            2. 为了得到pad 位置
+        '''
+        non_pad_mask = get_non_pad_mask(enc_output, input_lengths=input_lengths)    # pad 部分，置零，torch.Size([B, max_len, 1])
         length = padded_input.size(1)
 
-        slf_attn_mask = get_attn_pad_mask(enc_output, input_lengths, length)
-        # print(slf_attn_mask.size())   # torch.Size([128, 21, 21])
+        '''
+            3. slf_attn_mask
+                encoder: 仅需要考虑pad位置 (不需要做上三角矩阵)
+                ps: decoder矩阵需要 or 上三角矩阵
+        '''
+        slf_attn_mask = get_attn_pad_mask(enc_output, input_lengths, length)        # torch.Size([B, max_len, max_len])
 
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
@@ -89,8 +95,6 @@ class Encoder(nn.Module):
 
         if return_attns:
             return enc_output, enc_slf_attn_list
-        # print(enc_output.size())   # torch.Size([128, 21, 512])
-
         return enc_output,
 
 
@@ -111,6 +115,7 @@ class EncoderLayer(nn.Module):
             2. A simple, position-wise fully connected feed-forward network.
             编码块
         """
+        import ipdb;ipdb.set_trace()
         enc_output, enc_slf_attn = self.slf_attn(enc_input, enc_input, enc_input, mask=slf_attn_mask)
         enc_output *= non_pad_mask
 
